@@ -4,6 +4,7 @@ FROM golang:1.18 as two
 RUN echo "two reporing in $(date)" > /tmp/two
 
 FROM ubuntu as main
-## interestingly these print the same date still
 COPY --from=one /tmp/one /tmp/one
 COPY --from=two /tmp/two /tmp/two
+
+CMD ["cat", "/tmp/one", "/tmp/two"]
