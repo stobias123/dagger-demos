@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	log "github.com/sirupsen/logrus"
 	"go.dagger.io/dagger/engine"
 	"go.dagger.io/dagger/sdk/go/dagger/api"
 )
@@ -41,22 +42,26 @@ func main() {
 func run(ctx context.Context) {
 	if err := engine.Start(ctx, &engine.Config{}, func(ctx engine.Context) error {
 		core := api.New(ctx.Client)
-		
+
 		// get working directory on host
 		src, err := core.Host().Workdir().Read().ID(ctx)
 		if err != nil {
 			return err
 		}
-		
+
 		// initialize new container from image
 		golang := core.Container().From(golangImage)
+		golang2 := core.Container().From(golangImage)
 
 		// mount working directory to /src
 		golang = golang.WithMountedDirectory("/src", src).WithWorkdir("/src")
 
 		// execute command
 		cmd := golang.Exec(api.ContainerExecOpts{
-			Args: []string{"go", "run", "main.go"},
+			Args: []string{"/bin/bash", "-c", "sleep 10 && date"},
+		})
+		cmd2 := golang2.Exec(api.ContainerExecOpts{
+			Args: []string{"date"},
 		})
 
 		// get command output
@@ -65,8 +70,14 @@ func run(ctx context.Context) {
 			return err
 		}
 
+		out2, err := cmd2.Stdout().Contents(ctx)
+		if err != nil {
+			return err
+		}
+
 		// print output to console
-		fmt.Println(out)
+		log.Infof("out1 %s", out)
+		log.Infof("out2 %s", out2)
 
 		return nil
 	}); err != nil {
@@ -83,10 +94,10 @@ func test(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		
+
 		// initialize new container from image
 		golang := core.Container().From(golangImage)
-		
+
 		// mount working directory to /src
 		golang = golang.WithMountedDirectory("/src", src).WithWorkdir("/src")
 
@@ -119,7 +130,7 @@ func publish(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		
+
 		// initialize new container from image
 		builder := core.Container().From(golangImage)
 
@@ -139,18 +150,18 @@ func publish(ctx context.Context) {
 
 		// initialize new container for publishing from image
 		base := core.Container().From(baseImage)
-		
+
 		// mount binary file at container path
 		base = base.WithMountedFile("/tmp/hello", helloBin)
-		
+
 		// copy mounted file to container filesystem
 		base = base.Exec(api.ContainerExecOpts{
 			Args: []string{"cp", "/tmp/hello", "/bin/hello"},
 		})
-		
+
 		// set container entrypoint
 		base = base.WithEntrypoint([]string{"/bin/hello"})
-		
+
 		// publish image
 		addr, err := base.Publish(ctx, publishAddress)
 		if err != nil {
